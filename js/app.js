@@ -7,42 +7,53 @@
   var syncDom = document.getElementById('sync-wrapper');
 
   // EDITING STARTS HERE (you dont need to edit anything above this line)
-
-  var db = new Pouch('todos');
+  var db = new PouchDB('conouch-dev');
   var remoteCouch = false;
 
-  db.info(function(err, info) {
-    db.changes({since: info.update_seq, onChange: showTodos, continuous: true});
-  });
+
+  db.changes({
+    since: 'now',
+    live: true
+  }).on('change', showTodos);
 
   // We have to create a new todo document and enter it in the database
   function addTodo(text) {
     var todo = {
+      _id: new Date().toISOString(),
       title: text,
       completed: false
     };
-    db.post(todo, function(err, result) {
-      if (!err) {
-        console.log('Successfully posted a todo!');
-      }
+    db.put(todo).then (function(result) {
+      console.log("everything is A-OK");
+      console.log(result);
+    }).catch (function (err) {
+      console.log(err);
     });
   }
 
   // Show the current list of todos by reading them from the database
   function showTodos() {
-    db.allDocs({include_docs: true}, function(err, doc) {
+    db.allDocs({include_docs: true, descending: true}).then (function(doc) {
+      console.log("everything is A-OK");
       redrawTodosUI(doc.rows);
-    });
+    }).catch (function (err) {
+      console.log(err);
+    })
   }
 
   function checkboxChanged(todo, event) {
     todo.completed = event.target.checked;
-    db.put(todo);
+     db.put(todo).then (function(result) {
+       console.log("everything is A-OK");
+       console.log(result);
+     }).catch (function (err) {
+       console.log(err);
+     });;
   }
 
   // User pressed the delete button for a todo, delete it
   function deleteButtonPressed(todo) {
-    db.remove(todo);
+     db.remove(todo);
   }
 
   // The input box when editing a todo has blurred, we should save
@@ -59,9 +70,12 @@
 
   // Initialise a sync with the remote server
   function sync() {
+    var opts = {
+      continuous: true,
+    };
     syncDom.setAttribute('data-sync-state', 'syncing');
-    var pushRep = db.replicate.to(remoteCouch, {continuous: true, complete: syncError});
-    var pullRep = db.replicate.from(remoteCouch, {continuous: true, complete: syncError});
+    db.replicate.to(remoteCouch, opts, syncError);
+    db.replicate.from(remoteCouch, opts, syncError);
   }
 
   // EDITING STARTS HERE (you dont need to edit anything below this line)
@@ -149,11 +163,16 @@
     newTodoDom.addEventListener('keypress', newTodoKeyPressHandler, false);
   }
 
-  addEventListeners();
-  showTodos();
+  $(document).ready (function () {
+    newTodoDom = document.getElementById('new-todo');
+    syncDom = document.getElementById('sync-wrapper');
 
-  if (remoteCouch) {
-    sync();
-  }
+    addEventListeners();
+    showTodos();
+
+    if (remoteCouch) {
+      sync();
+    }
+  });
 
 })();
